@@ -1,0 +1,60 @@
+import numpy as np
+from qiskit import QuantumCircuit, Aer, execute
+from qiskit.quantum_info import Statevector
+
+def grover_search_adaptive(num_iterations, oracle, num_qubits):
+    """
+    Implements the Grover search algorithm with adaptive amplitude amplification
+    :param num_iterations: The maximum number of iterations to run the Grover search
+    :param oracle: The oracle circuit for the search
+    :param num_qubits: The number of qubits in the search
+    :return: The solution to the search
+    """
+    # Create the superposition state
+    qc = QuantumCircuit(num_qubits)
+    qc.h(range(num_qubits))
+
+    # Run the Grover search
+    for i in range(num_iterations):
+        # Apply the oracle
+        qc.append(oracle, range(num_qubits))
+
+        # Apply the amplification operator
+        qc.h(range(num_qubits))
+        qc.x(range(num_qubits))
+        qc.append(oracle, range(num_qubits))
+        qc.x(range(num_qubits))
+        qc.h(range(num_qubits))
+
+        # Adaptive amplitude amplification
+        state = Statevector.from_instruction(qc)
+        counts = state.probabilities_dict()
+        if len(counts) == 1:
+            break
+        estimate = max(counts, key=counts.get)
+        alpha = np.sqrt(counts[estimate])
+        beta = np.sqrt(1 - counts[estimate])
+        gamma = np.arccos(np.sqrt(1/len(counts)))
+        qc.h(range(num_qubits))
+        qc.append(oracle, range(num_qubits))
+        qc.u1(-gamma, range(num_qubits))
+        qc.h(range(num_qubits))
+        qc.u1(gamma, range(num_qubits))
+        qc.h(range(num_qubits))
+        qc.x(range(num_qubits))
+        qc.u1(-gamma, range(num_qubits))
+        qc.h(range(num_qubits))
+        qc.append(oracle, range(num_qubits))
+        qc.u1(gamma, range(num_qubits))
+        qc.h(range(num_qubits))
+        qc.u1(-gamma, range(num_qubits))
+        qc.x(range(num_qubits))
+        qc.u1(gamma, range(num_qubits))
+
+    # Measure the solution
+    qc.measure_all()
+    backend = Aer.get_backend('qasm_simulator')
+    result = execute(qc, backend).result()
+    counts = result.get_counts()
+    solution = max(counts, key=counts.get)
+    return solution
